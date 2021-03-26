@@ -25,8 +25,8 @@ FolderLS <- function(){
 LSread <- function(tile_path){
   # load bands and mtl
   band_paths = list.files(tile_path, full.names = T)
-  band_select = grepl("B[[:digit:]]",band_paths,value=TRUE)
-  landsat_bands <- raster::stack(band_select)
+  band_select = grep("B[[:digit:]]",band_paths,value=TRUE)
+  landsat_bands <- raster::brick(lapply(band_select, raster))
   names(landsat_bands) = gsub(paste0(".*(B.+).TIF"),'\\1',band_select)
   # meta (for shadows?)
   metaData <<- RStoolbox::readMeta(band_paths[which(grepl("MTL",band_paths))])
@@ -35,4 +35,8 @@ LSread <- function(tile_path){
 }
 
 # can weight all images by highest TIR (Thermal values) = better quality
+
+
+landstk = LSread(tile_path)
+
 
