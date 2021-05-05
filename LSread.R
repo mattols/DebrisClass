@@ -76,37 +76,15 @@ synchroniseNA <- function(x){
   }
 }
 
-# locate glacier tile ~3.1 mins
-LGpoly <- function(r){
-  # r is raster object 
-  ghma <- rgdal::readOGR("/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp")
-  gh_t = spTransform(ghma, crs(r))
-  gh_t2 <- rgeos::gBuffer(gh_t, byid=TRUE, width=0) # if "x[i, ] is invalid ERROR: Input geom 0 is invalid"
-  gk = crop(gh_t2,r)
-  return(gk)
-}
-# create glacier mask
-LGpoly2 <- function(r){
-  # r is raster object 
-  # rgeos::gIsValid(sf::st_read("/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp"))) # self-intersection
-  library(dplyr)
-  strt <- Sys.time()
-  # sp2 
-  raster::shapefile('/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp') %>%
-    spTransform(raster::crs(r)) %>%
-    rgeos::gBuffer(byid=TRUE, width=0) %>%
-    raster::crop(r) %>%
-    sf::st_as_sf() %>%
-    fasterize::fasterize(r) %>%
-    do.call(what = raster::writeRaster, args = list(.,filename=paste0(tmp_msks,"/glac2.grd"), overwrite=TRUE))
-    #raster::writeRaster(.,filename=paste0(tmp_msks,"/glac2.grd"), overwrite=TRUE)
-  
-  print(Sys.time() -strt)
-    
-  ghma <- sf::st_read("/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp") %>%
-    sf::st_transform(raster::crs(r))
-  # gh_t2 <- rgeos::gBuffer(gh_t, byid=TRUE, width=0) # if "x[i, ] is invalid ERROR: Input geom 0 is invalid"
-  gk = sf::st_crop(gh_t,r)
-  gk2 = sf::st_intersection(ghma,sf::st_geometry(r))
-  return(gk)
-}
+
+
+
+# # locate glacier tile ~3.1 mins
+# LGpoly <- function(r){
+#   # r is raster object 
+#   ghma <- rgdal::readOGR("/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp")
+#   gh_t = spTransform(ghma, crs(r))
+#   gh_t2 <- rgeos::gBuffer(gh_t, byid=TRUE, width=0) # if "x[i, ] is invalid ERROR: Input geom 0 is invalid"
+#   gk = crop(gh_t2,r)
+#   return(gk)
+# }

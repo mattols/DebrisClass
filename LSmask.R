@@ -18,17 +18,16 @@ LSmask <- function(landsat_bands, TM=TRUE){
     blue_band = 2; green_band = 3; red_band = 4
     NIR_band = 5; SWIR_band = 6; TH_band = 7  #(TH is band 10 but in 7)
   }
-  
   # mask RATIO
   ratioMethod(landsat_bands, threshold = 1.5, NIR_band, SWIR_band)
   # mask RGI
-  RGIglaciers()
+  glacierPolyR(landsat_bands)
   # shadow mask
-  shadow_mask <- makeShade()
+  # makeShade()
   # cloud mask 
-  cloud_mask = cloudScore()
+  # cloudScore()
   # classify
-  
+  simpleClass(landsat_bands)
 }
 
 # use overlay and save with filename option
@@ -36,36 +35,38 @@ ratioMethod <- function(landsat_bands, threshold, NIR_band, SWIR_band){
   # ratio method after Paul et al., 2004 and Hall 1998?
   raster::overlay(landsat_bands[[c(NIR_band,SWIR_band)]], fun= function(x,y) x/y > threshold,
                           filename=paste0(tmp_msks,"/ratio.grd"))
+  cat("\n file 'ratio.grd' created\n")
 }
 
-RGIglaciers <- function(x){
+# create glacier mask
+glacierPolyR <- function(r){
+  # r is raster object 
+  # rgeos::gIsValid(sf::st_read("/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp"))) # self-intersection
+  library(dplyr)
   strt <- Sys.time()
-  gk <- LGpoly(landsat_bands)
+  raster::shapefile('/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp') %>%
+    spTransform(raster::crs(r)) %>%
+    rgeos::gBuffer(byid=TRUE, width=0) %>%
+    raster::crop(r) %>%
+    sf::st_as_sf() %>%
+    fasterize::fasterize(.,r[[1]]) %>%
+    raster::writeRaster(.,filename=paste0(tmp_msks,"/glac.grd"), overwrite=TRUE)
   print(Sys.time() -strt)
-  strt <- Sys.time()
-  gk2 <- LGpoly2(landsat_bands)
-  print(Sys.time() -strt)
-  raster::writeRaster(fasterize::fasterize(sf_glaciers,landsat_bands[[1]]),filename=paste0(tmp_msks,"/glac.grd"), overwrite=TRUE)
-  print(Sys.time() -strt)
+  cat("\n file 'glac.grd' created\n")
 }
-
-
-# TO DO!!!
-# 1. finish reading in and cropping glaciers
-# 2. finish glacier mask
-# 3. determine debris
 
 # later try to figure out a good way to determine shadow/cloud
 
 
 cloudScore <- function(){
   # after Housman 2018
-  
+  cat("\n cloudScore() has not been created...\n")
 }
 
 makeShade <- function(){
   # detect shadows (dark pixels) <10% (~25)
   # doesn't work great
+  cat("\n makShade() is not complete!...\n")
   mx_name = paste0(tmp_msks,"/maxVIS.grd")
   calc(landsat_bands[[green_band:red_band]],max,na.rm=T,
              filename=mx_name, overwrite=TRUE)
@@ -90,7 +91,7 @@ pelv[pelv==0] = NA
 pstat = quantile(values(pelv),na.rm=T)[4]
 #
 
-simpleClass <- function(){
+simpleClass0 <- function(){
   g = raster(paste0(tmp_msks,"/glac.grd"))
   r = raster(paste0(tmp_msks,"/ratio.grd"))
   pisc = raster(paste0(tmp_msks,"/glac.grd"))==1 & raster(paste0(tmp_msks,"/ratio.grd"))==1
@@ -100,16 +101,41 @@ simpleClass <- function(){
               filename=paste0(tmp_msks,"/debris.grd"))
   writeRaster(( (raster(paste0(tmp_msks,"/glac.grd"))==1) & (raster(paste0(tmp_msks,"/ratio.grd"))==1) ),
               filename=paste0(tmp_msks,"/pisc.grd"), overwrite=TRUE)
-
 }
 
-plot(raster(paste0(tmp_msks,"/pisc.grd")))
+simpleClass <- function(r){
+  # change class name to reflect date
+  strt <- Sys.time()
+  pisc = raster(paste0(tmp_msks,"/glac.grd"))==1 & raster(paste0(tmp_msks,"/ratio.grd"))==1
+  pisc[raster(paste0(tmp_msks,"/glac.grd"))==1 & raster(paste0(tmp_msks,"/ratio.grd"))!=1] = 2
+  # correct for high cloud values
+  cat("\nmust correct for cloudiness\n")
+  writeRaster(pisc,filename=paste0(tmp_msks,"/class0.grd"), overwrite=TRUE)
+  print(Sys.time() -strt)
+  cat("\n file 'class0.grd' created\n")
+}
+
+# TO DO!
+# 1. get rid of 0 vals in class0.grd
+# 2. why is overlap strange?
+# 3. observe specral differenceces and set cloud correction!
+# 4. must also correct for some shadow!
+
+
+plot(raster(paste0(tmp_msks,"/class0.grd")))
 #
 plotRGB(landsat_bands,3,2,1)
-plot(raster(paste0(tmp_msks,"/pisc.grd")),add=T,col=ggplot2::alpha(c(NA,'red'),0.5))
+plot(raster(paste0(tmp_msks,"/class0.grd")),add=T,col=ggplot2::alpha(c(NA,'red'),0.5))
 
 
 
+
+
+
+
+
+
+# OLD SRTM CODE!
 ## add a get DEM and get shp options (FUNCTION)
 
 print(paste("...retrieving", t,"of",length(tile_names), "SRTM files."))
