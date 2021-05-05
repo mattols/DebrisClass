@@ -20,13 +20,15 @@ LSmask <- function(landsat_bands, TM=TRUE){
   }
   
   # mask RATIO
-  ratio_mask <- ratioMethod(landsat_bands, threshold = 1.5, NIR_band, SWIR_band)
+  ratioMethod(landsat_bands, threshold = 1.5, NIR_band, SWIR_band)
   # mask RGI
-  glacier_mask <- fasterize::fasterize(sf_glaciers,landsat_bands[[1]])
+  RGIglaciers()
   # shadow mask
   shadow_mask <- makeShade()
   # cloud mask 
   cloud_mask = cloudScore()
+  # classify
+  
 }
 
 # use overlay and save with filename option
@@ -36,21 +38,76 @@ ratioMethod <- function(landsat_bands, threshold, NIR_band, SWIR_band){
                           filename=paste0(tmp_msks,"/ratio.grd"))
 }
 
+RGIglaciers <- function(x){
+  strt <- Sys.time()
+  gk <- LGpoly(landsat_bands)
+  print(Sys.time() -strt)
+  strt <- Sys.time()
+  gk2 <- LGpoly2(landsat_bands)
+  print(Sys.time() -strt)
+  raster::writeRaster(fasterize::fasterize(sf_glaciers,landsat_bands[[1]]),filename=paste0(tmp_msks,"/glac.grd"), overwrite=TRUE)
+  print(Sys.time() -strt)
+}
+
+
+# TO DO!!!
+# 1. finish reading in and cropping glaciers
+# 2. finish glacier mask
+# 3. determine debris
+
+# later try to figure out a good way to determine shadow/cloud
+
+
 cloudScore <- function(){
   # after Housman 2018
   
 }
 
 makeShade <- function(){
-  # after 
-  m <- c(0,shade_threshold,1,shade_threshold, 255, NA)
-  rclmat <- matrix(m, ncol=3, byrow=TRUE)
-  rc <- raster::reclassify(, rclmat) # NIR_band
-  # inverse VALUES!
-  # shadow_mask <- raster::calc(sum(rc,na.rm=T), function(x){x[x>0]<-1;x[x==0]<-NA; return(x)})
-  raster::calc(calc(landsat_bands[[blue_band:NIR_band]],na.rm=T), function(x){x[x>0]<-NA;x[x==0]<-1; return(x)})
+  # detect shadows (dark pixels) <10% (~25)
+  # doesn't work great
+  mx_name = paste0(tmp_msks,"/maxVIS.grd")
+  calc(landsat_bands[[green_band:red_band]],max,na.rm=T,
+             filename=mx_name, overwrite=TRUE)
+  # mask(raster(mx_name),raster(mx_name)!=0,maskvalue=0)
+  raster::writeRaster(mask(raster(mx_name),raster(mx_name)!=0,maskvalue=0) >=25.5,
+                      filename=paste0(tmp_msks,"/shade.grd"), overwrite=TRUE)
   
+  # raster::writeRaster(raster::raster(mx_name) >=25.5,
+  #              filename=paste0(tmp_msks,"/shade.grd"), overwrite=TRUE)
 }
+
+
+
+# r2 = mask(landsat_bands[[2]],landsat_bands[[2]]!=0,maskvalue=0)
+dem0 <- get_srtm30(lstk[[2]], full_extent = TRUE, mask_to=TRUE) # call function
+dem = mask(crop(demL,landsat_bands),landsat_bands)
+sslope = raster::terrain(demL,opt='slope',unit='degrees', neighbors=8)
+aasp = raster::terrain(demL,opt='aspect',unit='degrees', neighbors=8)
+#
+pelv = demL*pisc
+pelv[pelv==0] = NA
+pstat = quantile(values(pelv),na.rm=T)[4]
+#
+
+simpleClass <- function(){
+  g = raster(paste0(tmp_msks,"/glac.grd"))
+  r = raster(paste0(tmp_msks,"/ratio.grd"))
+  pisc = raster(paste0(tmp_msks,"/glac.grd"))==1 & raster(paste0(tmp_msks,"/ratio.grd"))==1
+  writeRaster(pisc,
+              filename=paste0(tmp_msks,"/pisc.grd"))
+  writeRaster(g==1 & r!=1 & sslope<=40 & pelv<pstat,
+              filename=paste0(tmp_msks,"/debris.grd"))
+  writeRaster(( (raster(paste0(tmp_msks,"/glac.grd"))==1) & (raster(paste0(tmp_msks,"/ratio.grd"))==1) ),
+              filename=paste0(tmp_msks,"/pisc.grd"), overwrite=TRUE)
+
+}
+
+plot(raster(paste0(tmp_msks,"/pisc.grd")))
+#
+plotRGB(landsat_bands,3,2,1)
+plot(raster(paste0(tmp_msks,"/pisc.grd")),add=T,col=ggplot2::alpha(c(NA,'red'),0.5))
+
 
 
 ## add a get DEM and get shp options (FUNCTION)
@@ -72,3 +129,42 @@ rmosaic <- do.call(merge, c(rl, tolerance = 1))
 rmosaic <- mask(crop(rmosaic,shape),shape)
 
 if(del_files){files = list.files(tempdir(), full.names = T,pattern="^N");file.remove(files)}
+
+
+
+
+
+
+
+
+# PLOTS
+plot(raster(mx_name), breaks=c(0,25,50,100,150,200,255), col=terrain.colors(6))
+plot(raster(mx_name) > 20)
+#
+plotRGB(landsat_bands,3,2,1)
+plot(raster(paste0(tmp_msks,"/shade.grd")),add=T,col=ggplot2::alpha(c('red',NA),0.5))
+
+
+
+
+
+
+
+# observe some points
+# xym = as.matrix(data.frame(x = c(76.33396,76.38849,76.40904,76.20908,76.20117),
+#                            y= c(36.21360,36.16503,36.15800,36.20081,36.04552)))
+# pts = xym
+nfeat= 5
+pts = click(n=nfeat)
+em = extract(landsat_bands,pts) # columns represent spectral bands | rows represent end member class
+rownames(em) <- paste0("feature", 1:nfeat)
+colnames(em) <- paste0("band",c(1:nfeat,nlayers(landsat_bands)))
+head(em)
+#
+library(ggplot2)
+require(reshape2)
+require(dplyr)
+melt(em) %>% mutate(bn = as.numeric(substr(Var2,5,5))) %>% 
+  ggplot(aes(x=bn,y=value,colour=Var1)) + xlab("Landsat band") +
+  ylab("Radiance (DN)") +
+  geom_point() + geom_line()
