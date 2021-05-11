@@ -1,110 +1,76 @@
-# applying masks for debris cover
-# 2020-03-17
+# Simple method for classifying supra-glacial debris
+# 2021-05-10
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
 library(dplyr)
-# tmp_msks = paste0(tmpDir(), "masks")
-# dir.create(tmp_msks)
 
+# apply all masks
 LSmask <- function(landsat_bands, tile_roi, tile_name, TM=TRUE){
-  # define thresholds
-  
   # distinguish bands TM/OLI
   if(TM){
     cat("\n...creating masks for TM/ETM+ imagery \n") # ls_band_designations("TM")
     blue_band = 1; green_band = 2; red_band = 3;NIR_band = 4; SWIR_band = 5; TH_band = 6
   }else{
     cat("...creating masks for OLI imagery ") # ls_band_designations("OLI")
-    blue_band = 2; green_band = 3; red_band = 4
-    NIR_band = 5; SWIR_band = 6; TH_band = 7  #(TH is band 10 but in 7)
+    blue_band = 2; green_band = 3; red_band = 4; NIR_band = 5; SWIR_band = 6; TH_band = 7  #(TH is band 10 but in 7)
   }
   # mask RATIO
   ratioMethod(landsat_bands, threshold = 1.5, NIR_band, SWIR_band, tile_roi)
   # mask RGI
   glacierPolyR(landsat_bands,tile_name, tile_roi)
-  # shadow mask
   # makeShade()
-  # cloud mask 
   # cloudScore()
-  # classify
-  simpleClass(landsat_bands, green_band,tile_name)
-  unlink(paste0(tmp_msks,"/ratio.grd"))
+  simpleClass(landsat_bands, green_band,tile_name, tile_roi)
 }
 
-# use overlay and save with filename option
+# ratio method after Paul et al., 2004 and Hall 1998?
 ratioMethod <- function(landsat_bands, threshold, NIR_band, SWIR_band, tile_roi){
-  # ratio method after Paul et al., 2004 and Hall 1998?
   raster::overlay(landsat_bands[[c(NIR_band,SWIR_band)]], fun= function(x,y) x/y > threshold) %>%
-  raster::mask(., tile_roi) %>%
-    raster::writeRaster(.,paste0(tmp_msks,"/ratio.grd"),overwrite=TRUE)
-  # raster::overlay(landsat_bands[[c(NIR_band,SWIR_band)]], fun= function(x,y) x/y > threshold,
-  #                 filename=paste0(tmp_msks,"/ratio.grd"), overwrite=TRUE)
+    raster::crop(.,tile_roi) %>%
+    raster::mask(.,tile_roi) %>%
+    saveRDS(.,file.path(tmp_msks,"ratio.rds"))
   cat("\n file 'ratio.grd' created\n")
 }
 
-# create glacier mask
+# glacier mask from RGI 6.0
 glacierPolyR <- function(r, tile_name, tile_roi){
-  # r is raster object 
-  # rgeos::gIsValid(sf::st_read("/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp"))) # self-intersection
-  # if(file.exists(paste0(tmp_msks,"/",tile_name,"_glac.grd"))){
-  if(file.exists(file.path(tmp_msks,PR,"_gpoly.rds"))){
-    print("glacier mask exists",q=F)
-    read_rds(path = file.path(tmp_msks,PR, "gpoly.rds")) %>%
-      raster::crop(r) %>%
+  if(file.exists(file.path(tmp_msks,paste0(PR,"_gpoly.rds")))){
+    cat("\n.glacier polygon mask exists.\n")
+    readRDS(file.path(tmp_msks,paste0(PR, "_gpoly.rds"))) %>%
       fasterize::fasterize(.,r[[1]]) %>%
+      raster::crop(tile_roi) %>%
       raster::mask(., tile_roi) %>%
-      raster::writeRaster(.,paste0(tmp_msks,"/glac.grd"),overwrite=TRUE)
+      raster::writeRaster(., file.path(tmp_msks,"glac.rds"))
   }else{
-    strt <- Sys.time()
-    cat("\nTransforming RGI polygons\n")
-    raster::shapefile('/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp') %>%
+    cat("\nTransforming RGI polygons for tile",PR,"\n")
+    rgi1 = raster::shapefile(rgi_path) 
+    rgi1 = rgi1 %>%
       spTransform(raster::crs(tile_roi)) %>%
-      rgeos::gBuffer(byid=TRUE, width=0) %>%
-      raster::crop(buffer(tile_roi,20000)) %>%
-      sf::st_as_sf() %>%
-      write_rds(., path = file.path(tmp_msks,PR,"_gpoly.rds"))
-    print(Sys.time() -strt)
-    cat("\n file 'gpoly.rds' created\n")
-    
-  }
-}
-
-# create glacier mask
-glacierPolyR0 <- function(r,tile_name, tile_roi){
-  # r is raster object 
-  # rgeos::gIsValid(sf::st_read("/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp"))) # self-intersection
-  # if(file.exists(paste0(tmp_msks,"/",tile_name,"_glac.grd"))){
-  if(file.exists(paste0(tmp_msks,"/glac0.grd"))){
-    print("glacier mask exists",q=F)
-  }else{
-    strt <- Sys.time()
-    cat("\nTransforming RGI polygons\n")
-    raster::shapefile('/Users/mattolson/tmp/rgi60_HMA/rgi60_HMA.shp') %>%
-      spTransform(raster::crs(r)) %>%
-      rgeos::gBuffer(byid=TRUE, width=0) %>%
-      raster::crop(r) %>%
-      sf::st_as_sf() %>%
+      rgeos::gBuffer(byid=TRUE, width=0)
+    rgi1 = rgi1 %>% raster::crop(buffer(tile_roi,10000)) %>%
+      sf::st_as_sf()
+    saveRDS(rgi1, file.path(tmp_msks,paste0(PR,"_gpoly.rds")))
+    rgi1 %>%
       fasterize::fasterize(.,r[[1]]) %>%
+      raster::crop(tile_roi) %>%
       raster::mask(., tile_roi) %>%
-      raster::writeRaster(.,paste0(tmp_msks,"/glac.grd"),overwrite=TRUE)
-    print(Sys.time() -strt)
-    cat("\n file 'glac.grd' created\n")
-    
+      saveRDS(., file.path(tmp_msks,"glac.rds"))
+    rm(rgi1)
+    cat("\n file 'gpoly.rds' created\n")
   }
 }
-
-# later try to figure out a good way to determine shadow/cloud
 
 
 cloudScore <- function(){
   # after Housman 2018
   cat("\n cloudScore() has not been created...\n")
+  stop()
 }
 
 makeShade <- function(){
   # detect shadows (dark pixels) <10% (~25)
-  # doesn't work great
-  cat("\n makShade() is not complete!...\n")
+  # doesn't work!
+  cat("\n makeShade() is not complete!...\n")
   stop()
   mx_name = paste0(tmp_msks,"/maxVIS.grd")
   calc(landsat_bands[[green_band:red_band]],max,na.rm=T,
@@ -112,13 +78,27 @@ makeShade <- function(){
   # mask(raster(mx_name),raster(mx_name)!=0,maskvalue=0)
   raster::writeRaster(mask(raster(mx_name),raster(mx_name)!=0,maskvalue=0) >=25.5,
                       filename=paste0(tmp_msks,"/shade.grd"), overwrite=TRUE)
-  
-  # raster::writeRaster(raster::raster(mx_name) >=25.5,
-  #              filename=paste0(tmp_msks,"/shade.grd"), overwrite=TRUE)
+  # raster::writeRaster(raster::raster(mx_name) >=25.5,filename=paste0(tmp_msks,"/shade.grd"), overwrite=TRUE)
 }
 
+# simple classification
+simpleClass <- function(r, green_band, tile_name, tile_roi){
+  # strt <- Sys.time()
+  pisc = readRDS(file.path(tmp_msks,"glac.rds"))==1 & readRDS(file.path(tmp_msks,"ratio.rds"))==1
+  pisc[readRDS(file.path(tmp_msks,"glac.rds"))==1 & readRDS(file.path(tmp_msks,"ratio.rds"))!=1] = 2
+  cat("\n...revert 0 vals -> NA\n")
+  pisc <- reclassify(pisc, cbind(0, NA), right=FALSE)
+  r = mask(crop(r[[green_band]], tile_roi),tile_roi)
+  pisc[pisc==2 & (r>150)]=NA # correct for high cloud values
+  # saveRDS(pisc, file.path(tmp_msks,paste0(tile_name,"_class0.rds"))) # not transferable between sessions
+  raster::writeRaster(pisc,file.path(tmp_msks,paste0(tile_name,"_class0.grd")))
+  # print(Sys.time() -strt)
+  unlink(file.path(tmp_msks,"ratio.rds"))
+  unlink(file.path(tmp_msks,"glac.rds"))
+  cat("\n file 'class0.grd' created for",tile_name,"\n")
+}
 
-# classificcation with slope & elevation correcction
+# NOT USED - classification with slope & elevation correcction
 simpleClass0 <- function(){
   # terrain
   sslope = raster::terrain(dem,opt='slope',unit='degrees', neighbors=8)
@@ -137,15 +117,17 @@ simpleClass0 <- function(){
               filename=paste0(tmp_msks,"/pisc.grd"), overwrite=TRUE)
 }
 
-simpleClass <- function(r, green_band, tile_name){
+# NOT USED
+simpleClass1 <- function(r, green_band, tile_name, tile_roi){
   # change class name to reflect date
   strt <- Sys.time()
   pisc = raster(paste0(tmp_msks,"/glac.grd"))==1 & raster(paste0(tmp_msks,"/ratio.grd"))==1
   pisc[raster(paste0(tmp_msks,"/glac.grd"))==1 & raster(paste0(tmp_msks,"/ratio.grd"))!=1] = 2
   cat("\n...revert 0 vals -> NA\n")
   pisc <- reclassify(pisc, cbind(0, NA), right=FALSE)
-  pisc[pisc==2 & (r[[green_band]]>150)]=NA # correct for high cloud values
-  writeRaster(pisc,filename=paste0(tmp_msks,"/",tile_name,"_class0.grd"), overwrite=TRUE)
+  r = mask(crop(r[[green_band]], tile_roi),tile_roi)
+  pisc[pisc==2 & (r>150)]=NA # correct for high cloud values
+  writeRaster(pisc,filename=file.path(tmp_msks,paste0(tile_name,"_class0.grd")))
   # # save image w/ slope and elv correction (PSTAT ERROR)
   # if(!exists(pstat)){
   #   sslope = raster::terrain(raster::raster(paste0(tmp_msks,"/dem.grd")),opt='slope',unit='degrees', neighbors=8)
@@ -156,70 +138,25 @@ simpleClass <- function(r, green_band, tile_name){
   # }
   # pisc[pisc==2 & (sslope<=40 | raster::raster(paste0(tmp_msks,"/dem.grd"))>pstat)]=1
   # writeRaster(pisc,paste0(tmp_msks,"/",tile_name,"_class1.grd"))
-  print(Sys.time() -strt)
   cat("\n file 'class0.grd' created\n")
-  # cat("\n file 'class0.grd' & 'class1.grd' created\n")
+  print(Sys.time() -strt)
 }
 
-# TO DO!
-# 2. why is overlap strange?
-# 3. observe specral differenceces and set cloud correction!
-# 4. must also correct for some shadow!
+
 
 stop()
-plot(raster(paste0(tmp_msks,"/class0.grd")),col=c("deepskyblue3","orange3"))
+plot(readRDS(file.path(tmp_msks,"148035_20190901_class0.rds")),col=c("deepskyblue3","orange3"))
 #
 plotRGB(landsat_bands,3,2,1)
 plot(raster(paste0(tmp_msks,"/class0.grd")),add=T,col=ggplot2::alpha(c(NA,'red'),0.5))
 
 
-
-
-
-
-
-
-
-# OLD SRTM CODE!
-## add a get DEM and get shp options (FUNCTION)
-
-print(paste("...retrieving", t,"of",length(tile_names), "SRTM files."))
-temp <- tempfile(pattern = tile_names[t], fileext = ".zip")
-GET(srtm_list[t],authenticate("matthew.olson@geog.utah.edu", "Televator9", type = "basic"),
-    write_disk(temp))
-# save to tempdir
-out <- unzip(temp, exdir = tempdir())
-if(loadAll_tiles){assign(tile_names[t],raster(out))}
-file.remove(temp) # remove .zip
-
-# merge tiles
-files = list.files(tempdir(),full.names = T,pattern = ".hgt")
-rl <- lapply(files, raster)
-print("Generating mosaic...")
-rmosaic <- do.call(merge, c(rl, tolerance = 1))
-rmosaic <- mask(crop(rmosaic,shape),shape)
-
-if(del_files){files = list.files(tempdir(), full.names = T,pattern="^N");file.remove(files)}
-
-
-temp <- tempfile(pattern = paste0(tile_name,"_lbands_"), fileext = ".grd")
-
-
-
-
-
-# # PLOTS
-# plot(raster(mx_name), breaks=c(0,25,50,100,150,200,255), col=terrain.colors(6))
-# plot(raster(mx_name) > 20)
-# #
-# plotRGB(landsat_bands,3,2,1)
-# plot(raster(paste0(tmp_msks,"/shade.grd")),add=T,col=ggplot2::alpha(c('red',NA),0.5))
-# 
-# 
-
-
-
-
+savename = "basic_class_wclouds2"
+png(paste0("/Users/mattolson/projects/Debris_snow_class/results/simple_new/",savename,".png"),width=12.5,height=9,unit='in',res=300)
+plotRGB(landsat_bands,5,2,1)
+plot(pisc,add=T,col=ggplot2::alpha(c("blue","red"),0.5))
+dev.off()
+# zoom
 
 # observe some points
 # xym = as.matrix(data.frame(x = c(76.33396,76.38849,76.40904,76.20908,76.20117),
