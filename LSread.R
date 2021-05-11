@@ -42,7 +42,7 @@ FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){
   for (im in image_list){
     cat("\n  ...classifying image", match(im,image_list),"of",length(image_list),"\n")
     # im = image_list[1]
-    tile_name = paste0(PR,"_",gsub(paste0(".*",PR,"_(.+)_2.*"),'\\1',t))
+    tile_name = paste0(PR,"_",gsub(paste0(".*",PR,"_(.+)_2.*"),'\\1',im))
     tmp_msks <<- file.path(savepath, PR)
     if(!file.exists(tmp_msks)){
       dir.create(tmp_msks)
