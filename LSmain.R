@@ -8,19 +8,18 @@
 source('~/src/DebrisClass/LSread.R')
 source('~/src/DebrisClass/LSmask.R')
 
-# for all tiles
-landpath = "/Users/mattolson/data/Landsat"
-savepath = "~/data/Landsat/results"
-FolderTiles(landpath, savepath)
-
 # single scene test
 # multiple scenes
 PR = 148035
 folder_path = "/Users/mattolson/data/Landsat/148035/L07_148035_19992002_AugOct"
-FolderLS(folder_path,PR, LS7 = TRUE, savepath) # works
+FolderLS(folder_path,PR, LS7 = TRUE, savepath="~/data/Landsat/results") # works
 folder_path = "/Users/mattolson/data/Landsat/148035/L08_148035_20162020_AugOct/"
-FolderLS(folder_path,PR, LS7 = FALSE, LS8 = TRUE, savepath)
+FolderLS(folder_path,PR, LS7 = FALSE, LS8 = TRUE, savepath="~/data/Landsat/results")
 
+# for all tiles
+landpath = "/Users/mattolson/data/Landsat"
+savepath = "~/data/Landsat/results"
+FolderTiles(landpath, savepath)
 
 # success!
 # 0.) add aggregate function (time period) ->save

@@ -20,6 +20,7 @@ FolderTiles <- function(pathLSt, savepath){
     FolderLS(t,PR, LS7 = FALSE, LS8 = TRUE, savepath)
     # create aggregate images
     stop()
+    LSdebris_change()
     # change...
   }
 }
@@ -39,15 +40,15 @@ FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){
   # mask to roi
   tile_roi = Ldt_tile(PR,lstile_path)
   for (im in image_list){
-    # t = image_list[1]
+    cat("\n  ...classifying image", match(im,image_list),"of",length(image_list),"\n")
+    # im = image_list[1]
     tile_name = paste0(PR,"_",gsub(paste0(".*",PR,"_(.+)_2.*"),'\\1',t))
     tmp_msks <<- file.path(savepath, PR)
     if(!file.exists(tmp_msks)){
       dir.create(tmp_msks)
     }
     # LSread
-    cat("\n  ...classifying image", match(im,image_list),"of",length(image_list),"\n")
-    landsat_bands = LSread0(t, LS8)
+    landsat_bands = LSread0(im, LS8)
     # generate DEM
     # LSdem(tile_roi) # 8 mins
     # create masks & classification
@@ -65,7 +66,7 @@ LSread0 <- function(tile_path,tile_roi, LS8=FALSE){
   strt <- Sys.time()
   band_paths = list.files(tile_path, full.names = T)
   if(LS8){bds="2-6"}else{bds = "1-5"}
-  band_select = grep(cat("B[",bds,"]"),band_paths,value=TRUE)
+  band_select = grep(paste0("B[",bds,"]"),band_paths,value=TRUE)
   landsat_bands <- raster::brick(lapply(band_select, raster))
   # landsat_bands <- mask(landsat_bands,tile_roi)
   print(Sys.time() -strt)
@@ -271,6 +272,27 @@ time_average <- function(class_stk, before=NULL,after=NULL, month_select=NULL,
   print(Sys.time() - strt)
   return(t1mo)
 }
+
+LSdebris_change <- function(class_path){
+  
+  class_Nstk
+  # best to select dates from folder first
+  
+  # compare
+  t1merge = time_average(class_Nstk, before=1995, aggmethod = "mean",
+                         month_select = c("08","09"), by_month = FALSE)
+  t2merge = time_average(class_Nstk, before=2002, after=1998, aggmethod = "mean",
+                         month_select = c("08","09"), by_month = FALSE)
+  t3merge = time_average(class_Nstk, after=2005, aggmethod = "mean",
+                         month_select = c("08","09"), by_month = FALSE)
+  # plot
+  dm1 = t1merge-(t2merge*4)
+  dm2 = t1merge-(t3merge*4)
+  plot_change(dm1,simple=TRUE)
+  plot_change(dm2,simple=TRUE)
+}
+
+
 
 
 ####################################################################################

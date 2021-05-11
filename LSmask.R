@@ -40,7 +40,7 @@ glacierPolyR <- function(r, tile_name, tile_roi){
       fasterize::fasterize(.,r[[1]]) %>%
       raster::crop(tile_roi) %>%
       raster::mask(., tile_roi) %>%
-      raster::writeRaster(., file.path(tmp_msks,"glac.rds"))
+      saveRDS(., file.path(tmp_msks,"glac.rds"))
   }else{
     cat("\nTransforming RGI polygons for tile",PR,"\n")
     rgi1 = raster::shapefile(rgi_path) 
