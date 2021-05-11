@@ -43,9 +43,9 @@ FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){
     cat("\n  ...classifying image", match(im,image_list),"of",length(image_list),"\n")
     # im = image_list[1]
     tile_name = paste0(PR,"_",gsub(paste0(".*",PR,"_(.+)_2.*"),'\\1',im))
-    tmp_msks <<- file.path(savepath, PR)
-    if(!file.exists(tmp_msks)){
-      dir.create(tmp_msks)
+    save_folder <<- file.path(savepath, PR)
+    if(!file.exists(save_folder)){
+      dir.create(save_folder)
     }
     # LSread
     landsat_bands = LSread0(im, LS8)
@@ -61,15 +61,13 @@ FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){
 }
 
 # Simple load for bands 1-5 only
-LSread0 <- function(tile_path,tile_roi, LS8=FALSE){
+LSread0 <- function(tile_path,LS8=FALSE){
   # load bands and mtl
-  strt <- Sys.time()
   band_paths = list.files(tile_path, full.names = T)
   if(LS8){bds="2-6"}else{bds = "1-5"}
   band_select = grep(paste0("B[",bds,"]"),band_paths,value=TRUE)
   landsat_bands <- raster::brick(lapply(band_select, raster))
   # landsat_bands <- mask(landsat_bands,tile_roi)
-  print(Sys.time() -strt)
   return(landsat_bands)
 }
 
@@ -97,7 +95,7 @@ LSreadTM <- function(tile_path, TM=TRUE, revertNA=TRUE, synchronise=TRUE){
   return(landsat_bands)
 }
 
-## NEW LOAD BASED ON SENSOR (NOT NEEDED - Only read in a few bands)
+## NOT USED - Load based on sensor
 # storage hog 
 LSread2 <- function(tile_path, LS7=FALSE, LS8=FALSE, revertNA=TRUE, synchronise=TRUE){
   # load bands and mtl
@@ -161,13 +159,13 @@ synchroniseNA <- function(x){
 # download and resample SRTM DEM for tile (based on referenec raster)
 LSdem <- function(ref_rast, tile_roi){
   # rewrite srtm code (possibly use NASAdem)
-  if(file.path(tmp_msks,paste0(PR,"_dem.rds"))){
+  if(file.path(save_folder,paste0(PR,"_dem.rds"))){
     print("dem exists!",q=F)
   }else{
     source('~/projects/Debris_snow_class/src/srtm_download1.R') # rewrite!
     dem0 <- get_srtm30(ref_rast, full_extent = TRUE, mask_to=TRUE) # call function
     dem = mask(crop(dem0,tile_roi),tile_roi)
-    raster::writeRaster(dem,filename=file.path(tmp_msks,paste0(PR,"_dem.rds")), overwrite=TRUE)
+    raster::writeRaster(dem,filename=file.path(save_folder,paste0(PR,"_dem.rds")), overwrite=TRUE)
     # return(dem)
   }
 }
@@ -197,6 +195,11 @@ time_average <- function(class_stk, before=NULL,after=NULL, month_select=NULL,
   #         annual aves. / fall aves
   # dates = c(as.Date(names(class_stk), "X%Y_%m_%d"))
   # DATES (FOR NEPAL)
+  
+  
+  
+  
+  
   strt=Sys.time()
   if(PR==140041){
     dates = c(as.Date(names(class_stk)[1:4], "X%Y%m%d"),
