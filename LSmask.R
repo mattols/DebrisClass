@@ -7,7 +7,7 @@ library(dplyr)
 # apply all masks
 LSmask <- function(landsat_bands, tile_roi, tile_name, TM=TRUE){
   # distinguish bands TM/OLI
-  if(TM){
+  if(TRUE){
     # cat("\n...creating masks for TM/ETM+ imagery \n") # ls_band_designations("TM")
     blue_band = 1; green_band = 2; red_band = 3;NIR_band = 4; SWIR_band = 5; TH_band = 6
   }else{
@@ -20,7 +20,7 @@ LSmask <- function(landsat_bands, tile_roi, tile_name, TM=TRUE){
   glacierPolyR(landsat_bands,tile_name, tile_roi)
   # makeShade()
   # cloudScore()
-  simpleClass(landsat_bands, green_band,tile_name, tile_roi)
+  simpleClass(landsat_bands, green_band,tile_name, tile_roi,LS7=TM)
 }
 
 # ratio method after Paul et al., 2004 and Hall 1998?
@@ -82,13 +82,14 @@ makeShade <- function(){
 }
 
 # simple classification
-simpleClass <- function(r, green_band, tile_name, tile_roi){
+simpleClass <- function(r, green_band, tile_name, tile_roi,LS7){
   # strt <- Sys.time()
   pisc = readRDS(file.path(save_folder,"glac.rds"))==1 & readRDS(file.path(save_folder,"ratio.rds"))==1
   pisc[readRDS(file.path(save_folder,"glac.rds"))==1 & readRDS(file.path(save_folder,"ratio.rds"))!=1] = 2
   pisc <- reclassify(pisc, cbind(0, NA), right=FALSE)
   r = mask(crop(r[[green_band]], tile_roi),tile_roi)
-  pisc[pisc==2 & (r>35400)]=NA
+  if(LS7){mnum=150}else{mnum=35400}
+  pisc[pisc==2 & (r>mnum)]=NA
   # pisc[pisc==2 & (r>150)]=NA # correct for high cloud values
   # saveRDS(pisc, file.path(save_folder,paste0(tile_name,"_class0.rds"))) # not transferable between sessions
   raster::writeRaster(pisc,file.path(save_folder,paste0(tile_name,"_class0.grd")))

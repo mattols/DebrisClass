@@ -15,6 +15,12 @@ folder_path = "/Users/mattolson/data/Landsat/148035/L07_148035_19992002_AugOct"
 FolderLS(folder_path,PR, LS7 = TRUE, savepath="~/data/Landsat/results") # works
 folder_path = "/Users/mattolson/data/Landsat/148035/L08_148035_20162020_AugOct/"
 FolderLS(folder_path,PR, LS7 = FALSE, LS8 = TRUE, savepath="~/data/Landsat/results")
+#
+PR = 140041
+folder_path = "/Users/mattolson/data/Landsat/140041/L07_140041_19992002_AugOct"
+FolderLS(folder_path,PR, LS7 = TRUE, savepath="~/data/Landsat/results") # works
+folder_path = "/Users/mattolson/data/Landsat/140041/L08_140041_20162020_AugOct"
+FolderLS(folder_path,PR, LS7 = FALSE, LS8 = TRUE, savepath="~/data/Landsat/results")
 
 # for all tiles
 landpath = "/Users/mattolson/data/Landsat"

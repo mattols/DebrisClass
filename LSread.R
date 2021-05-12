@@ -52,7 +52,7 @@ FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){
     # generate DEM
     # LSdem(tile_roi) # 8 mins
     # create masks & classification
-    LSmask(landsat_bands,tile_roi, tile_name,TM=TRUE) # !TM=LS7 because simple read makes ETM/TM/OLI bands the same
+    LSmask(landsat_bands,tile_roi, tile_name,TM=LS7) # !TM=LS7 because simple read makes ETM/TM/OLI bands the same
     # output automatically saved
     unlink(tmpDir(), recursive=TRUE)
   }
@@ -188,26 +188,15 @@ Ldt_tile <- function(PR,lstile_path,dest_crs="+proj=utm +zone=43 +datum=WGS84 +u
 }
   
 # make composite
-time_average <- function(class_stk, before=NULL,after=NULL, month_select=NULL,
+time_average <- function(save_folder, before=NULL,after=NULL, month_select=NULL,
                          by_month=TRUE,aggmethod = "mean"){
   # need: class_stk, logic dates (t1, t2), aggmethod = c("max","mean","modal")
   # return: monthly averages for time period
   #         annual aves. / fall aves
-  # dates = c(as.Date(names(class_stk), "X%Y_%m_%d"))
-  # DATES (FOR NEPAL)
-  
-  
-  
-  
-  
-  strt=Sys.time()
-  if(PR==140041){
-    dates = c(as.Date(names(class_stk)[1:4], "X%Y%m%d"),
-              as.Date(names(class_stk)[5:82], "X%Y_%m_%d"))
-  }else{
-    dates = as.Date(names(class_stk), "X%Y_%m_%d")
-  }
-  
+  # DATES
+  fls = list.files(save_folder,pattern = "*class0.grd", full.names = TRUE)
+  ds = unlist(lapply(fls, FUN=function(x) strsplit(x,"_")[[1]][2]))
+  dates = as.Date(ds, "%Y%m%d")
   yd = format(dates, "%Y");md = as.numeric(format(dates, "%m"))
   yix = match(yd,yd)
   # TIMEPERIOD
@@ -236,15 +225,13 @@ time_average <- function(class_stk, before=NULL,after=NULL, month_select=NULL,
   # !!! could also select based on julian day
   #
   # select subset
-  t1stk = class_stk[[tidx]]
+  print("Stacking layers...")
+  rl <- lapply(fls[tidx], raster)
+  t1stk <- do.call(brick, rl)
   md1 = md[tidx]
   lsm = unique(md1)
   lsmonth = sort(lsm)
-  # # # # # # # # # # # # # # # # #
-  # # correct (snow vs ice) ! ! ! ! ! ! ! ! ! ! ! (change or include earlier)
-  # print("...rearranging values",quote=F)
-  # t1stk[t1stk==2]=4;t1stk[t1stk==1]=2;t1stk[t1stk==4]=1
-  # # # # # # # # # # # # # # # # #
+
   if(by_month){
     cat("\nmerging by month: (",month_select,")\n",as.character(dates[tidx]), '\n > length:',length(tidx),'\n')
     # Monthly aggregate
@@ -259,43 +246,38 @@ time_average <- function(class_stk, before=NULL,after=NULL, month_select=NULL,
   #
   # mean
   if(aggmethod=="mean"){
-    if(max(values(class_stk0[[1]]),na.rm=T)>2){
-      m <- c( 0,   1.5, 1,  # at least 50% required
-              1.51, 2.5, 2, 
-              2.51, 3,   3)
-    }else{
-      m <- c( 0,   1.5, 1,  # at least 50% required
-              1.51, 2.5, 2, 
-              2.51, 3,   3)
-    }
-    
+    m <- c( 0,   1.5, 1,  # at least 50% required
+            1.51, 2, 2)
     rclmat <- matrix(m, ncol=3, byrow=TRUE)
     t1mo <- reclassify(t1mo, rclmat)
   }
-  print(Sys.time() - strt)
+  # writeRaster(t1mo,filename=file.path(save_folder,paste0(PR,"t1_classification.grd")))
   return(t1mo)
 }
 
-LSdebris_change <- function(class_path){
-  
-  class_Nstk
-  # best to select dates from folder first
-  
+# determine change
+LSdebris_change <- function(save_folder,PR,mid_time=2005, funct = "mean", month_select=NULL){
   # compare
-  t1merge = time_average(class_Nstk, before=1995, aggmethod = "mean",
-                         month_select = c("08","09"), by_month = FALSE)
-  t2merge = time_average(class_Nstk, before=2002, after=1998, aggmethod = "mean",
-                         month_select = c("08","09"), by_month = FALSE)
-  t3merge = time_average(class_Nstk, after=2005, aggmethod = "mean",
-                         month_select = c("08","09"), by_month = FALSE)
-  # plot
-  dm1 = t1merge-(t2merge*4)
-  dm2 = t1merge-(t3merge*4)
-  plot_change(dm1,simple=TRUE)
-  plot_change(dm2,simple=TRUE)
+  t1merge = time_average(save_folder, before=mid_time, aggmethod = "mean",
+                         month_select = NULL, by_month = FALSE)        # month_select = c("08","09")
+  t2merge = time_average(save_folder, after=mid_time, aggmethod = "mean",
+                         month_select = NULL, by_month = FALSE)
+
+  # plot_change(t1merge,t2merge,n_class=2,simple=TRUE)
+  # -7: 1-8 (pisc->debris)
+  # -6: 2-8 (debris)
+  # -3: 1-4 (pisc)
+  # -2: 2-4 (debris->pisc)
+  m <- c( -7,3,
+          -6,2,
+          -3,1,
+          -2,4)
+  rclmat <- matrix(m, ncol=2, byrow=TRUE)
+  reclassify(t1merge-(t2merge*4), rclmat) %>%
+    writeRaster(.,filename=file.path(save_folder,paste0(PR,"_class1.grd")))
+  unlink(tmpDir(), recursive=TRUE)
+  # 1:PISC | 2:DEBRIS | 3:DGain | 4:DLoss
 }
-
-
 
 
 ####################################################################################
