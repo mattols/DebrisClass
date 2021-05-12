@@ -7,8 +7,14 @@ dhdt = raster("/Users/mattolson/data/Shean/shean_hma_glacier_ASTER_WV_2000-2018_
 plotRGB(ls2,3,2,1)
 plot(dcn, col=ggplot2::alpha(lab_col,0.5), add=T,legend=F)
 
-ls2 = crop(landsat_bands2, dsurf)
-dcn = crop(dchange2, dsurf)
+fpath3 = "/Users/mattolson/projects/Debris_snow_class/results/simple_results/L05_Psimple148035.tif"
+fpath4 = "/Users/mattolson/projects/Debris_snow_class/results/simple_results/L05_Psimple140041.tif"
+class_stk0 <- raster::stack(fpath3)
+class_stk0N <- raster::stack(fpath4)
+
+# crop
+ls2 = crop(landsat_bands2, class_stk0)
+dcn = crop(dchange2, class_stk0)
 
 ls3 = projectRaster(ls2, crs=crs(dhdt))
 dcn3 = projectRaster(dcn, crs=crs(dhdt),method = "ngb")
@@ -44,6 +50,8 @@ df0 = df0[complete.cases(df0),]
 
 plot(smooth.spline(df0$dh~df0$e),type="l",lwd=2,col='firebrick',ylab="dh/dt (m a-1)",xlab='Elevation (m)')
 
+new_labs = c("Snow/ice","Debris","Debris gain", "Snow/ice gain")
+lab_col = c("#386CB0", "#BF5B17", "violet","cyan")
 lab_col2 = c("#BF5B17", "violet",  "#386CB0", "cyan")
 
 
@@ -60,7 +68,25 @@ df0 %>% mutate(ch = recode(ch, "1" = "Snow/ice", "2" = "Debris", "3" = "Debris g
   xlab("Elevation (m)")
 dev.off()
 
+# plot area and change
+
+
 getValues(g1dh[g1dem<=0.2])
 
+# NEPAL
+r2 = class_stk0N[[1]]
+r3 = projectRaster(r2,crs=crs(dhdt))
+dh3 = crop(dhdt,r3)
+ch2 = projectRaster(ch,crs=crs(dhdt))
+chp = rasterToPolygons(ch2,dissolve = T)
 
+plot(dh3,col=rev(RColorBrewer::brewer.pal(9,"Reds")),cex.axis=1.2,
+     legend.args = list(text = bquote('dh/dt (m '~a^-1~")"), side = 3, 
+                        font = 2, line = 1, cex = 1,adj=0.25))
+plot(ch2, add=T,col = ggplot2::alpha(lab_col, 0.5),legend=F)
+dhn = dh3;dhn[dhn>=0]= NA
+contour(dhn,add=T, breaks=seq(-20,0,4), labels=seq(-20,0,4),labcex=2)
+legend("topright",fill= ggplot2::alpha(lab_col, 0.4),cex=0.9,
+       legend=sapply(new_labs, as.expression))
 
+filledContour(dh3)

@@ -36,7 +36,7 @@ FolderTiles(landpath, savepath)
 # read in and unlink landsat_bands when done!
 
 # clear all data
-unlink(tmp_msks, recursive=TRUE)
+# unlink(tmp_msks, recursive=TRUE)
 unlink(tmpDir(), recursive=TRUE)
 rm(list=ls())
 gc()

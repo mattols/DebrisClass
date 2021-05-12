@@ -173,8 +173,9 @@ LSdem <- function(ref_rast, tile_roi){
 # call landsat tile shape
 Ldt_tile <- function(PR,lstile_path,dest_crs="+proj=utm +zone=43 +datum=WGS84 +units=m +no_defs",centroid_only=FALSE){
   Ldesc = rgdal::readOGR(lstile_path)
-  tile_find = which(Ldesc$PATH == substr(PR,1,3) & 
-                      Ldesc$ROW == as.character(as.numeric(substr(PR,4,6))))
+  # tile_find = which(Ldesc$PATH == substr(PR,1,3) & 
+  #                     Ldesc$ROW == as.character(as.numeric(substr(PR,4,6))))
+  tile_find = which(Ldesc$PR == as.character(PR))
   Ldt = Ldesc[tile_find,]
   if(as.character(crs(Ldt))!=dest_crs){
     Ldt = sp::spTransform(Ldt,crs(dest_crs))  
