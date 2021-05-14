@@ -9,6 +9,7 @@ source('~/src/DebrisClass/LSread.R')
 source('~/src/DebrisClass/LSmask.R')
 
 # single scene test
+savepath = "~/data/Landsat/results"
 # multiple scenes
 PR = 148035
 folder_path = "/Users/mattolson/data/Landsat/148035/L07_148035_19992002_AugOct"

@@ -20,7 +20,9 @@ FolderTiles <- function(pathLSt, savepath){
     FolderLS(t,PR, LS7 = FALSE, LS8 = TRUE, savepath)
     # create aggregate images
     stop()
-    LSdebris_change()
+    strt <- Sys.time()
+    LSdebris_change(save_folder,PR)
+    print(Sys.time() -strt)
     # change...
   }
 }
@@ -38,7 +40,7 @@ FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){
   strt <- Sys.time()
   image_list = list.files(folder_path, full.names = T)
   # mask to roi
-  tile_roi = Ldt_tile(PR,lstile_path)
+  # tile_roi = Ldt_tile(PR,lstile_path)
   for (im in image_list){
     cat("\n  ...classifying image", match(im,image_list),"of",length(image_list),"\n")
     # im = image_list[1]
@@ -49,6 +51,15 @@ FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){
     }
     # LSread
     landsat_bands = LSread0(im, LS8)
+    # new ROI
+    if(!exists("tile_roi")){
+      if(!file.exists(file.path(save_folder,paste0(PR,"_tileRoi.rds")))){
+        tile_roi <- new_tile(landsat_bands)
+        saveRDS(tile_roi,file.path(save_folder,paste0(PR,"_tileRoi.rds")))
+      }else{
+        tile_roi <- readRDS(file.path(save_folder,paste0(PR,"_tileRoi.rds")))
+      }
+    }
     # generate DEM
     # LSdem(tile_roi) # 8 mins
     # create masks & classification
@@ -67,6 +78,28 @@ LSread0 <- function(tile_path,LS8=FALSE){
   if(LS8){bds="2-6"}else{bds = "1-5"}
   band_select = grep(paste0("B[",bds,"]"),band_paths,value=TRUE)
   landsat_bands <- raster::brick(lapply(band_select, raster))
+  # landsat_bands <- mask(landsat_bands,tile_roi)
+  return(landsat_bands)
+}
+
+LSread02 <- function(tile_path,LS8=FALSE,revertNA=TRUE,synchronise=TRUE){
+  # load bands and mtl
+  band_paths = list.files(tile_path, full.names = T)
+  if(LS8){bds="2-6"}else{bds = "1-5"}
+  band_select = grep(paste0("B[",bds,"]"),band_paths,value=TRUE)
+  landsat_bands <- raster::brick(lapply(band_select, raster))
+  if(revertNA){ # change all 0 values -> NA
+    # cat("\n synchronising... [estimated ~4.5 mins]\n")
+    landsat_bands <- reclassify(landsat_bands, cbind(0, NA), right=FALSE) # ~1.6 mins
+    # landsat_bands = mask(landsat_bands,landsat_bands!=0,maskvalue=0) # 3.9 mins
+  }
+  if(synchronise){
+    landsat_bands <- synchroniseNA(landsat_bands) # 2.9 minslstk = synchroniseNA(landstk) # 2.9 mins
+  }
+  tmp_ls = list.files(tmpDir(),full.names = TRUE)
+  fd = paste0(strsplit(basename(filename(landsat_bands)),"\\.")[[1]][1],".*")
+  del_ls = tmp_ls[!grepl(fd,tmp_ls)]
+  unlink(del_ls)
   # landsat_bands <- mask(landsat_bands,tile_roi)
   return(landsat_bands)
 }
@@ -187,6 +220,16 @@ Ldt_tile <- function(PR,lstile_path,dest_crs="+proj=utm +zone=43 +datum=WGS84 +u
   }
   return(Ldt)
 }
+
+# create a new tile on extent
+new_tile <- function(landsat_bands, PR, bf = 1e4){
+  e <- extent( landsat_bands )
+  p <- as(e, 'SpatialPolygons')
+  crs(p) <- crs(landsat_bands)
+  p = buffer(p,width=bf)
+  return(p)
+  # shapefile(p, 'file.shp')
+}
   
 # make composite
 time_average <- function(save_folder, before=NULL,after=NULL, month_select=NULL,
@@ -228,7 +271,20 @@ time_average <- function(save_folder, before=NULL,after=NULL, month_select=NULL,
   # select subset
   print("Stacking layers...")
   rl <- lapply(fls[tidx], raster)
-  t1stk <- do.call(brick, rl)
+  # rl2 = lapply(1:length(rl), function(x)  rl[[x]] = extend(rl[[x]], p))
+  stkLS <- function(rl){
+    tryCatch({
+      t1 = do.call(brick, rl)
+    },
+    error = function(err) {
+      message("aligning stack")
+      rl2 = lapply(1:length(rl), function(x)  rl[[x]] = extend(rl[[x]], p))
+      t1 = do.call(brick, rl2)
+      return(t1)
+    })
+  }
+  t1stk = stkLS(rl)
+  # t1stk <- do.call(brick, rl)
   md1 = md[tidx]
   lsm = unique(md1)
   lsmonth = sort(lsm)
