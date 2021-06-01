@@ -14,7 +14,7 @@ FolderTiles <- function(pathLSt, savepath){
   for (t in tile_list){
     cat("\n> Starting", match(t,tile_list),"of",length(tile_list),"\n")
     PR = basename(t)
-    LS7 #obtain from name
+    LS7 = substr(list.files(t)[1],1,4) # contains 7 or 8???
     LS8
     # classify all images
     FolderLS(t,PR, LS7 = FALSE, LS8 = TRUE, savepath)
@@ -33,7 +33,9 @@ FolderTiles <- function(pathLSt, savepath){
 # 5.) dhdt
 # 6.) dem file
 
-
+#### START HERE
+# plot(raster(file.path(save_folder,"140041_class1.grd")))
+# classification does not look good...figure out why?
 
 # for all images in tile
 FolderLS <- function(folder_path, PR, LS7=FALSE, LS8=FALSE, savepath){

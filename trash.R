@@ -256,3 +256,90 @@ lapply(1:8,function(x) extent(tile_roi)==extent(rl[[x]]))
 
 lapply(1:8,function(x) extent(p2)==extent(rl[[x]]))
 
+
+# test Everest
+r = raster(file.path(save_folder,"140041_class1.grd"))
+e <- extent( c(417000, 530000, 3050000, 3140000) )
+p2 <- as(e, 'SpatialPolygons')
+crs(p2) <- crs(r)
+rp = crop(r,p)
+plot(rp)
+
+
+flls = list.files("/Users/mattolson/data/Landsat/140041/L07_140041_19992002_AugOct/", full.names = TRUE)
+dfth = data.frame(x=1:length(flls),med=NA,mean=NA,mean3=NA)
+for (i in 1:length(flls)){
+  print(paste(i, "of",length((flls))))
+  band_paths = list.files(flls[i], full.names = T)
+  band_select3 = grep(paste0("B[3]"),band_paths,value=TRUE)
+  band_select = grep(paste0("B[6]"),band_paths,value=TRUE)[[2]]
+  lsTH <- raster::raster(band_select)
+  ls3 <- raster::raster(band_select3)
+  dfth$med[i] = quantile(getValues(lsTH))[3]
+  dfth$mean[i] = mean(getValues(lsTH),na.rm=T)
+  dfth$mean3[i] = mean(getValues(ls3),na.rm=T)
+  if (i==1){
+    lstk = lsTH
+    ls3k = ls3
+  }else{
+    lstk = stack(crop(lstk,lsTH), crop(lsTH, lstk))
+    ls3k = stack(crop(ls3k,ls3), crop(ls3, ls3k))
+  }
+}
+dfth$date = as.Date(gsub(paste0(".*",PR,"_(.+)_2.*"),'\\1',flls),"%Y%m%d")
+head(dfth)  
+plot(mean~date, data=dfth, ylim=c(80,125),type='b')
+points(med~date,data=dfth,col='red', type='b')
+match(sort(dfth$mean),dfth$mean)
+match(sort(dfth$mean,decreasing=TRUE),dfth$mean) # lowest
+plot(lstk[[5]], main=dfth$date[5])
+#
+tl = 1 # 5, 1, 7
+bansls = grep(paste0("B[1-5]"),list.files(flls[tl], full.names = T),value=TRUE)
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls0 = crop(landsat_bands,p2)
+plotRGB(ls0,3,2,1)
+
+ratio = (ls0[[4]]/ls0[[5]]) > 1.5
+g = readRDS(file.path(save_folder,"140041_gpoly.rds"))
+gf = fasterize::fasterize(g,ratio)
+clss = ratio==1 & gf==1
+clss[ratio!=1 & gf==1]=2
+clss[is.na(gf)]=NA
+plot(clss)
+
+plotRGB(ls0,3,2,1)
+plot(clss, add=T, col=ggplot2::alpha(c("blue","red"),0.5))
+#
+
+for (i in 1:length(flls)){
+  # tl = match(sort(dfth$mean,decreasing=TRUE),dfth$mean)[i]
+  bansls = grep(paste0("B[1-5]"),list.files(flls[i], full.names = T),value=TRUE)
+  landsat_bands <- raster::brick(lapply(bansls, raster))
+  ls2 = crop(landsat_bands,p2)
+  ratio = (ls2[[4]]/ls2[[5]]) > 1.5
+  gf = fasterize::fasterize(g,ratio)
+  clss0 = ratio==1 & gf==1
+  clss0[ratio!=1 & gf==1]=2
+  clss0[is.na(gf)]=NA
+  if (i==1){
+    lst = clss0
+  }else{
+    lst = stack(crop(lst,clss0), crop(clss0, lst))
+  }
+}
+names(lst) = gsub(paste0(".*",PR,"_(.+)_2.*"),'\\1',flls)
+
+
+tmp_ls = list.files(tmpDir(),full.names = TRUE)
+fd = list(paste0(strsplit(basename(filename(ls0)),"\\.")[[1]][1],".*"),
+          paste0(strsplit(basename(filename(lst[[1]])),"\\.")[[1]][1],".*"),
+          paste0(strsplit(basename(filename(ls3k[[1]])),"\\.")[[1]][1],".*"))
+
+del_ls = tmp_ls[!grepl(fd[[1]],tmp_ls)]
+del_ls = del_ls[!grepl(fd[[2]],tmp_ls)]
+del_ls = del_ls[!grepl(fd[[3]],tmp_ls)]
+unlink(del_ls)
+
+
+

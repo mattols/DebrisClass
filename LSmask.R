@@ -165,7 +165,7 @@ dev.off()
 # xym = as.matrix(data.frame(x = c(76.33396,76.38849,76.40904,76.20908,76.20117),
 #                            y= c(36.21360,36.16503,36.15800,36.20081,36.04552)))
 # pts = xym
-nfeat= 6
+nfeat= 9
 pts = click(n=nfeat)
 em = extract(landsat_bands,pts) # columns represent spectral bands | rows represent end member class
 rownames(em) <- paste0("feature", 1:nfeat)
@@ -182,5 +182,20 @@ melt(em) %>% mutate(bn = as.numeric(substr(Var2,5,5))) %>%
   geom_point() + geom_line()
 
 df0 = as.data.frame(landsat_bands)
+
+
+as_tibble(em) %>% mutate(ndsi = (band3-band5)/(band3+band5)) %>%
+  mutate(ratio = (band4/band5)) %>% select(-contains("band")) %>%
+  mutate(type = c(rep("snow",3),rep("debris",3),rep("water",2),"shade")) %>%
+  melt(id.vars="type")%>% 
+  ggplot(aes(x=variable,y=value,colour=type)) + xlab("ratio/method") +
+  ylab("value") + geom_hline(yintercept=1.5) + geom_hline(yintercept=0.4,linetype='dashed') +
+  geom_boxplot()
+
+
+
+
+
+
 
 
