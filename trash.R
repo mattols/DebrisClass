@@ -209,7 +209,8 @@ df1 %>% ungroup() %>% group_by(surface_change) %>% select(n) %>%
 
 
 
-
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# ASSESS ACCURACY
 
 
 
@@ -220,11 +221,91 @@ rl <- lapply(fls, raster)
 
 lapply(rl, extent)
 
-p2 = buffer(p,width=1e4)
+# p2 = buffer(p,width=1e4)
+
 for (i in 1:length(rl)){ rl[[i]] = extend(rl[[i]], p2)}
-rl2 = lapply(1:length(rl), function(x)  rl[[x]] = extend(rl[[x]], p))
+rl2 = lapply(1:length(rl), function(x)  rl[[x]] = crop(rl[[x]], p2))
 s0 <- stack(rl2)
 
+# aggMethods
+#mode
+t1mo = stackApply(s0[[2:8]],indices=1,modal)
+#mean
+t1me = stackApply(s0[[2:8]],indices=1,mean)
+m <- c( 0,   1.5, 1,  # at least 50% required
+        1.51, 2, 2)
+rclmat <- matrix(m, ncol=3, byrow=TRUE)
+t1me <- reclassify(t1me, rclmat)
+#sum
+t1ms = stackApply(s0[[2:8]],indices=1,sum)
+t1mf = sum(!is.na(s0[[2:8]]))
+# second time period
+t2mo = stackApply(s0[[9:12]],indices=1,modal)
+t2me = stackApply(s0[[9:12]],indices=1,mean)
+t2ms = stackApply(s0[[9:12]],indices=1,sum)
+t2mf = sum(!is.na(s0[[9:12]]))
+# change map
+m <- c( -7,3,
+        -6,2,
+        -3,1,
+        -2,4)
+rclmat <- matrix(m, ncol=2, byrow=TRUE)
+tch = reclassify(t1mo-(t2mo*4), rclmat)
+plot(tch)
+
+# bqb
+bqls = grep(paste0("BQA"),list.files(flls[tl], full.names = T),value=TRUE)
+bqb <- raster::brick(lapply(bqls, raster))
+bqb = crop(bqb,p2)
+levels(as.factor(getValues(bqb)))
+plotRGB(ls0,3,2,1)
+plot(bqb==760, add=T, col=ggplot2::alpha(c(NA,"red"),0.5))
+plot(bqb==764, add=T, col=ggplot2::alpha(c(NA,"blue"),0.5))
+plotRGB(ls0,3,2,1)
+plot(bqb==752, add=T, col=ggplot2::alpha(c(NA,"red"),0.5))
+plot(bqb==756, add=T, col=ggplot2::alpha(c(NA,"blue"),0.5))
+# 760 and 764 seem to be best for snow
+# 752 gets cloud edges and 
+
+# BQA
+bls = unlist(lapply(1:length(flls), function(x) grep(paste0("BQA"),list.files(flls[x], full.names = T),value=TRUE)))
+brl <- lapply(bls, raster)
+bl2 = lapply(1:length(brl), function(x)  brl[[x]] = crop(brl[[x]], p2))
+b0 <- stack(bl2)
+bd = calc(b0==752,sum)
+plot(bd)
+plot(g,add=T,col=NA)
+plot(bd>2)
+plot(g,add=T,col=NA)
+
+# snow/ice
+ssl =  c(1696, 1700, 1704,1708, 1728, 1732, 1736, 1740)
+bs = calc(b0 %in% ssl,sum)
+plot(bs>0)
+plot(g,add=T,col=NA)
+
+# make simple classification based only on bqa info
+clb = bs>0 & gf==1
+clb[bd>2 & gf==1]=2
+plot(clb)
+clb[clb==0]=NA
+
+# how good?
+plot(t1mo-clb)
+# +1 = t1 snow / clb debris
+# -1 = t1 debris / clb snow
+plotRGB(ls0,3,2,1)
+plot(t1mo-clb, add=T, col=ggplot2::alpha(c("red",NA, "blue"),0.4),legend=F)
+plotRGB(ls0,3,2,1)
+plot(clb, add=T, col=ggplot2::alpha(c("blue","red"),0.4),legend=F)
+plotRGB(ls0,3,2,1)
+plot(t1mo, add=T, col=ggplot2::alpha(c("blue","red"),0.4),legend=F)
+plotRGB(ls0,3,2,1)
+plot(t1me, add=T, col=ggplot2::alpha(c("blue","red"),0.4),legend=F)
+
+# using the bqa bands seems to do just as well as the mode
+t1 = stackApply(stack(t1me,t1mo,clb), indices=1,modal)
+plot(t1,col=c("blue","red"))
 
 # align brick
 # make a matrix out of it, each column represents a raster, rows the values
@@ -262,7 +343,7 @@ r = raster(file.path(save_folder,"140041_class1.grd"))
 e <- extent( c(417000, 530000, 3050000, 3140000) )
 p2 <- as(e, 'SpatialPolygons')
 crs(p2) <- crs(r)
-rp = crop(r,p)
+rp = crop(r,p2)
 plot(rp)
 
 
@@ -294,7 +375,7 @@ match(sort(dfth$mean),dfth$mean)
 match(sort(dfth$mean,decreasing=TRUE),dfth$mean) # lowest
 plot(lstk[[5]], main=dfth$date[5])
 #
-tl = 1 # 5, 1, 7
+tl = 5 # 5, 1, 7
 bansls = grep(paste0("B[1-5]"),list.files(flls[tl], full.names = T),value=TRUE)
 landsat_bands <- raster::brick(lapply(bansls, raster))
 ls0 = crop(landsat_bands,p2)
@@ -333,13 +414,297 @@ names(lst) = gsub(paste0(".*",PR,"_(.+)_2.*"),'\\1',flls)
 
 tmp_ls = list.files(tmpDir(),full.names = TRUE)
 fd = list(paste0(strsplit(basename(filename(ls0)),"\\.")[[1]][1],".*"),
-          paste0(strsplit(basename(filename(lst[[1]])),"\\.")[[1]][1],".*"),
-          paste0(strsplit(basename(filename(ls3k[[1]])),"\\.")[[1]][1],".*"))
+          paste0(strsplit(basename(filename(ls2[[1]])),"\\.")[[1]][1],".*"),
+          paste0(strsplit(basename(filename(bqb)),"\\.")[[1]][1],".*"),
+          paste0(strsplit(basename(filename(bqb2)),"\\.")[[1]][1],".*"))
 
 del_ls = tmp_ls[!grepl(fd[[1]],tmp_ls)]
 del_ls = del_ls[!grepl(fd[[2]],tmp_ls)]
 del_ls = del_ls[!grepl(fd[[3]],tmp_ls)]
+del_ls = del_ls[!grepl(fd[[4]],tmp_ls)]
 unlink(del_ls)
+
+
+
+
+
+
+
+
+# # # # # # # # #
+# CLOSER
+
+r = raster(file.path(save_folder,"140041_class1.grd"))
+e <- extent( c(457000, 490000, 3088000, 3120000) )
+p2 <- as(e, 'SpatialPolygons')
+crs(p2) <- crs(r)
+
+#
+tl = 5 # 5, 1, 7
+bansls = grep(paste0("B[1-5]"),list.files(flls[tl], full.names = T),value=TRUE)
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls0 = crop(landsat_bands,p2)
+plotRGB(ls0,3,2,1)
+
+ratio = (ls0[[4]]/ls0[[5]]) > 1.5
+g = readRDS(file.path(save_folder,"140041_gpoly.rds"))
+gf = fasterize::fasterize(g,ratio)
+clss = ratio==1 & gf==1
+clss[ratio!=1 & gf==1]=2
+clss[is.na(gf)]=NA
+plot(clss)
+
+plotRGB(ls0,3,2,1)
+plot(clss, add=T, col=ggplot2::alpha(c("blue","red"),0.5))
+#
+
+ndsi = overlay(ls0[[c(2,5)]] , fun=function(a,b) (a-b) / (a+b)) >= 0.4
+clss2 = ndsi==1 & gf==1
+clss2[ndsi!=1 & gf==1]=2
+clss2[is.na(gf)]=NA
+plot(clss2)
+plotRGB(ls0,3,2,1)
+plot(clss2, add=T, col=ggplot2::alpha(c("blue","red"),0.5))
+#
+
+# BQA
+bls = unlist(lapply(1:length(flls), function(x) grep(paste0("BQA"),list.files(flls[x], full.names = T),value=TRUE)))
+brl <- lapply(bls, raster)
+bl2 = lapply(1:length(brl), function(x)  brl[[x]] = crop(brl[[x]], p2))
+b0 <- stack(bl2)
+bd = calc(b0==752,sum)
+plot(bd)
+plot(g,add=T,col=NA)
+plot(bd>2)
+plot(g,add=T,col=NA)
+
+# snow/ice
+ssl =  c(1696, 1700, 1704,1708, 1728, 1732, 1736, 1740)
+bs = calc(b0 %in% ssl,sum)
+
+
+
+
+
+
+
+
+
+
+
+e <- extent( c(417000, 530000, 3050000, 3140000) )
+p2 <- as(e, 'SpatialPolygons')
+crs(p2) <- "+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs"
+
+
+
+
+ # # # # # # # # COMPARISON
+sp = grep(list.files(path="/Users/mattolson/data/Landsat/140041/Compare7_8/",full.names = TRUE), pattern='tar', invert=TRUE, value=TRUE)
+# 2014
+bansls = grep(paste0("B[2-6]"),list.files(sp[1], full.names = T),value=TRUE)
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls814 = crop(landsat_bands,p2)
+bansls = grep(paste0("B[1-5]"),list.files(sp[3], full.names = T),value=TRUE)
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls714 = crop(landsat_bands,p2)
+
+# classification
+ratio = (ls814[[4]]/ls814[[5]]) > 1.5
+ratio2 = (ls814[[3]]/ls814[[5]]) > 2
+ndsi =  overlay(ls814[[3]],ls814[[5]], fun=function(x,y) (x-y)/(x+y)) > 0.4
+g = readRDS(file.path(save_folder,"140041_gpoly.rds"))
+gf = fasterize::fasterize(g,ratio)
+cl814 = ratio==1 & gf==1
+cl814[ratio!=1 & gf==1]=2
+cl814[is.na(gf)]=NA
+plot(cl814)
+ratio = (ls714[[4]]/ls714[[5]]) > 1.5
+g = readRDS(file.path(save_folder,"140041_gpoly.rds"))
+gf = fasterize::fasterize(g,ratio)
+cl714 = ratio==1 & gf==1
+cl714[ratio!=1 & gf==1]=2
+cl714[is.na(gf)]=NA
+plot(cl714)
+
+plot(cl814 - cl714)
+
+plotRGB(ls814,3,2,1)
+plot(cl814, add=T, col=ggplot2::alpha(c("blue","red"),0.5))
+
+plotRGB(ls714,3,2,1)
+plot(cl814-cl714, add=T, col=ggplot2::alpha(c("blue",NA,"red"),0.5))
+#
+# TO DO
+# mask for clouds with each
+# edge effects on sensors
+# make misclassifications into points and observe spectra
+
+cl814 - cl714
+#  1 l8 debris - l7 pisc
+# -1 l8 pisc - l7 debris
+
+# BQA comparison
+bls = unlist(lapply(1:length(sp), function(x) grep(paste0("BQA"),list.files(sp[x], full.names = T),value=TRUE)))
+brl <- lapply(bls, raster)
+bl2 = lapply(1:length(brl), function(x)  brl[[x]] = crop(brl[[x]], p2))
+b0 <- stack(bl2)
+b0
+plotRGB(ls814,3,2,1)
+l8cloud = c(2800,2804,2808,2812,6896,6900,6904,6908)
+l8cirrus = c(6816,6820,6824,6828,6848,6852,6856,6860,6896,6900,6904,6908,7072,7072,7076,7080,7084,7104,7108,7112,7116,7844,7848,7852,7872,7876,7880,7884)
+l8pisc = c(3744,3748,3752,3756,3776,3784,3788,7840,7844,7848,7852,7876,7880,7884)
+l8clshade = c(2976,2980,2984,2988,3008,3012,3016,3020,7072,7076,7080,7084,7104,7108,7112,7116)
+plot(b0[[1]] %in% l8cloud)
+plot(b0[[1]] %in% l8pisc)
+plot(b0[[1]] %in% l8cirrus)
+plot(b0[[1]] %in% l8clshade)
+
+# 2800 & 6896 have most
+plot(b0[[1]]==2800, add=T, col=ggplot2::alpha(c(NA,"red"),0.5))
+# band 9
+bansls = grep(paste0("B9"),list.files(sp[1], full.names = T),value=TRUE)
+landsat_bands <- raster::raster(bansls)
+ls_cirr814 = crop(landsat_bands,p2)
+plotRGB(ls814,3,2,1)
+plot(ls_cirr814>12000, add=T, col=ggplot2::alpha(c(NA,"blue"),0.5)) # or 15000
+# maybe
+plotRGB(ls814,3,2,1)
+plot((b0[[1]] ==2800 & lsfull814[[7]]>10000) | b0[[1]] ==6896, col=ggplot2::alpha(c(NA,"red"),0.5),add=T)
+# loudmsk
+l814cloud = !( (b0[[1]]==2800 & lsfull814[[7]]>10000) | b0[[1]]==6896 )
+#
+`%!in%` = Negate(`%in%`)
+
+
+
+
+
+# BETTER CLASSIFICATION
+bansls = c(grep(paste0("B[2-6]"),list.files(sp[1], full.names = T),value=TRUE),grep(paste0("B9"),list.files(sp[1], full.names = T),value=TRUE))
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls814 = crop(landsat_bands,p2)
+# class (L8)
+ratio = (ls814[[4]]/ls814[[5]]) > 1.5
+g = readRDS(file.path(save_folder,"140041_gpoly.rds"))
+gf = fasterize::fasterize(g,ratio)
+cl814 = ratio==1 & gf==1  & !( (b0[[1]]==2800 & ls814[[7]]>10000) | b0[[1]]==6896 )
+cl814[ratio!=1 & gf==1  & !( (b0[[1]]==2800 & ls814[[7]]>10000) | b0[[1]]==6896 )]=2
+cl814[is.na(gf)]=NA
+cl814[cl814==0]=NA
+plot(cl814, col=c('blue',"orange"))
+cl814 = filter_pixels(cl814,9)
+# READ L7
+bansls = grep(paste0("B[1-5]"),list.files(sp[3], full.names = T),value=TRUE)
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls714 = crop(landsat_bands,p2)
+# class (L7)
+ratio = (ls714[[4]]/ls714[[5]]) > 1.5
+g = readRDS(file.path(save_folder,"140041_gpoly.rds"))
+gf = fasterize::fasterize(g,ratio)
+cl714 = ratio==1 & gf==1  & !( b0[[3]]==760 | b0[[3]]==762 )
+cl714[ratio!=1 & gf==1 & !( b0[[3]]==760 | b0[[3]]==762 ) ]=2
+cl714[is.na(gf)]=NA
+cl714[cl714==0]=NA
+plot(cl714, col=c('blue',"orange"))
+# clump (get rid of small groups)
+cl714 = filter_pixels(cl714,9)
+# BQA
+ssl =  c(1696, 1700, 1704,1708, 1728, 1732, 1736, 1740)
+bs = calc(b0[[3]] %in% ssl,sum)
+clb = bs>0 & gf==1
+clb[b0[[3]]==752 & gf==1]=2
+clb[clb==0]=NA
+# possibly combine?
+stackApply(stack(cl714,cl714,clb),indices=1, modal)
+
+
+plot(cl814-cl714, col=c("blue",NA,"red"))
+# compare
+plotRGB(ls814,3,2,1)
+plot(cl814-cl714, add=T, col=ggplot2::alpha(c("blue",NA,"red"),0.5))
+
+# create confusion matrix
+tcon = table(data.frame(l8_scene = getValues(cl814), l7_scene = getValues(cl714))) # as n
+tcon
+tcon2 = round( (table(data.frame(l8_scene = getValues(cl814), l7_scene = getValues(cl714)))/sum(tcon) *100) , 2) # as %
+tcon2
+# Accuracy ( assuming L8 is true) # Precision ( assuming L8 is true)
+cat(" Final (Pisc/Debris) accuracy ~", round( ( (tcon[1,1]+tcon[2,2])/(tcon[1,1]+tcon[2,2]+tcon[2,1]+tcon[1,2]) * 100 ) ,2), "% \n",
+    "Snow precision   ~", round( ( tcon[1,1]/(tcon[1,1]+tcon[1,2]) * 100 ) ,2), "% \n",
+    "Debris precision ~", round( ( tcon[2,2]/(tcon[2,2]+tcon[2,1]) * 100 ) ,2), "% \n   (assuming OLI image as True)") # debris
+# pretty good, issues associated with clouds
+ratio = (ls814[[4]]/ls814[[5]]) > 1.5
+ratio2 = (ls714[[4]]/ls714[[5]]) > 1.5
+plot(calc(stack(ratio,ratio2*4), sum),col=c(NA,'red','orange','blue'))
+# blue (5) - both pisc
+# orange (4) - only Landsat 7 saw snow
+# red (1) only landsat 8 saw snow
+
+tratcon = table(data.frame(l8_scene = getValues(ratio), l7_scene = getValues(ratio2))) # as n
+tratcon
+# Accuracy ( assuming L8 is true) # Precision ( assuming L8 is true)
+cat(" Ratio accuracy ~", round( ( (tratcon[1,1]+tratcon[2,2])/(tratcon[1,1]+tratcon[2,2]+tratcon[2,1]+tratcon[1,2]) * 100 ) ,2), "% \n",
+    "Ratio precision ~", round( ( tratcon[2,2]/(tratcon[2,2]+tratcon[2,1]) * 100 ) ,2), "% \n   (assuming OLI image as True)") # debris
+
+
+
+
+
+# # # ##
+
+# 2015
+bansls = grep(paste0("B[2-6]"),list.files(sp[2], full.names = T),value=TRUE)
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls815 = crop(landsat_bands,p2)
+bansls = grep(paste0("B[1-5]"),list.files(sp[4], full.names = T),value=TRUE)
+landsat_bands <- raster::brick(lapply(bansls, raster))
+ls715 = crop(landsat_bands,p2)
+
+
+
+
+filter_pixels <- function(r, min_size){
+  # expects classes 1 & 2 only
+  rc_pisc <- clump(r==1, directions = 8) 
+  f<-as.data.frame(freq(rc_pisc))
+  excludeID <- f$value[which(f$count <= min_size)]
+  rc_pisc[rc_pisc %in% excludeID] <- NA
+  # debris
+  rc_deb <- clump(r==2, directions = 8) 
+  f<-as.data.frame(freq(rc_deb))
+  excludeID <- f$value[which(f$count <= min_size)]
+  rc_deb[rc_deb %in% excludeID] <- NA
+  rc_deb[!is.na(rc_pisc)] <- 1
+  r[is.na(rc_deb)] = NA
+  return(r)
+}
+
+# https://gis.stackexchange.com/questions/130993/remove-clumps-of-pixels-in-r
+# rc_pisc <- clump(cl714==1, directions = 8) 
+# f<-freq(rc_pisc)
+# f<-as.data.frame(f)
+# excludeID <- f$value[which(f$count <= 9)]
+# rc_pisc[rc_pisc %in% excludeID] <- NA
+# # debris
+# rc_deb <- clump(cl714==2, directions = 8) 
+# f<-freq(rc_deb)
+# f<-as.data.frame(f)
+# excludeID <- f$value[which(f$count <= 9)]
+# rc_deb[rc_deb %in% excludeID] <- NA
+# rc_deb[!is.na(rc_pisc)] <- 1
+# # mask
+# cl714[is.na(rc_deb)] = NA
+
+
+
+
+
+
+
+
+
+
 
 
 
